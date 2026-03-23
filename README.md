@@ -5,12 +5,14 @@ Juan Manuel Gonzalez Segura
 
 ---
 
-## Ejercicio 2
 
-**Objetivo:** Lograr que los cambios en archivos de configuración (`config.ini` y `config.yaml`) apliquen de inmediato sin reconstruir las imágenes de Docker.
+## Ejercicio 3
 
-1. Modificación de script `generar.py` para inyectar las carpetas host mediantes propiedades `volumes` hacia su root correspondiente en los contenedores.
-2. Eliminación de variables de entorno duras (`LOGGING_LEVEL` y `CLI_LOG_LEVEL`) del compose forzando la lectura viva obligatoria desde los volumenes inyectados en runtime.
+**Objetivo:** Validar el funcionamiento del servidor de manera independiente interactuando directamente a través de la red de contenedores.
+
+1. Creación de un script `validar-echo-server.sh` que levanta un contenedor temporal de la imagen `busybox`, enrutándolo a la red interna compartida (`testing_net`). 
+2. Utilización de la herramienta `nc` (netcat) dentro de este contenedor para enviar un mensaje directo al contenedor `server` por el puerto `12345`.
+3. El script verifica que la respuesta recibida sea idéntica al payload enviado ("el mensaje del papu :v") para corroborar la correctitud del "Echo server", imprimiendo el resultado (`success` o `fail`) por salida estándar.
 
 ---
 
@@ -30,3 +32,7 @@ Para detener la ejecución y limpiar los recursos levantados, se corre:
 
 **Administración de Configuración y Entorno:** 
 Los nodos y clientes se actualizan directamente desde el Host cambiando `config.ini` o `config.yaml`, ya que los túneles locales suplen a los archivos construidos por `Dockerfile` mediante inyección montada vía Volúmenes y no interviene el `docker build` en el ciclo de vida de los cambios pequeños.
+
+**Testeo de la red:** Usando el script
+`validar-echo-server.sh`
+es posible validar el funcionamiento del servidor de manera independiente interactuando directamente a través de la red de contenedores.
