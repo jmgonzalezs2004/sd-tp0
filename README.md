@@ -5,15 +5,12 @@ Juan Manuel Gonzalez Segura
 
 ---
 
-## Ejercicio
+## Ejercicio 2
 
-Implemento generador de config para el docker compose basado en la interfaz pública provista por la cátedra.
+**Objetivo:** Lograr que los cambios en archivos de configuración (`config.ini` y `config.yaml`) apliquen de inmediato sin reconstruir las imágenes de Docker.
 
-La implementación se realizó en python.
-
-**Posibles mejoras a agregar:**
-- Soporte para parámetros predeterminados (ej: cantidad de clientes por defecto si no se le pasa ningún valor).
-- Parámetro tipo flag (ej: `--run`) para que el script no sólo genere el archivo sino que automáticamente haga un `docker compose up` ni bien termina.
+1. Modificación de script `generar.py` para inyectar las carpetas host mediantes propiedades `volumes` hacia su root correspondiente en los contenedores.
+2. Eliminación de variables de entorno duras (`LOGGING_LEVEL` y `CLI_LOG_LEVEL`) del compose forzando la lectura viva obligatoria desde los volumenes inyectados en runtime.
 
 ---
 
@@ -25,10 +22,11 @@ Para levantar el programa se puede utilizar el Makefile con:
 
 `make docker-compose-up`
 
-Para ver los logs generados por los contenedores, se utiliza:
-
 `make docker-compose-logs`
 
 Para detener la ejecución y limpiar los recursos levantados, se corre:
 
 `make docker-compose-down`
+
+**Administración de Configuración y Entorno:** 
+Los nodos y clientes se actualizan directamente desde el Host cambiando `config.ini` o `config.yaml`, ya que los túneles locales suplen a los archivos construidos por `Dockerfile` mediante inyección montada vía Volúmenes y no interviene el `docker build` en el ciclo de vida de los cambios pequeños.
