@@ -24,6 +24,8 @@ services:
       - LOGGING_LEVEL=DEBUG
     networks:
       - testing_net
+    volumes:
+      - ./server/config.ini:/config.ini
 """
     for i in range(1, clients + 1):
         yaml += f"""
@@ -36,6 +38,10 @@ services:
       - CLI_LOG_LEVEL=DEBUG
     networks:
       - testing_net
+    volumes:
+      - ./server/config.ini:/config.ini
+        volumes:
+      - ./client/config.yaml:/config.yaml
     depends_on:
       - server
 """
@@ -43,6 +49,8 @@ services:
     yaml += """
 networks:
   testing_net:
+    volumes:
+      - ./server/config.ini:/config.ini
     ipam:
       driver: default
       config:
