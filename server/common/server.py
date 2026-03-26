@@ -2,6 +2,9 @@ import socket
 import logging
 import signal
 
+from common.utils import Bet, store_bets
+from common.protocol import recv_bet, send_response
+
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -24,7 +27,7 @@ class Server:
 
     def run(self):
         """
-        Dummy Server loop
+        Server loop
 
         Server that accept a new connections and establishes a
         communication with a client. After client with communucation
@@ -44,20 +47,35 @@ class Server:
 
     def __handle_client_connection(self, client_sock):
         """
-        Read message from a specific client socket and closes the socket
+        Read bet from a specific client socket, store it, and close the socket.
 
         If a problem arises in the communication with the client, the
-        client socket will also be closed
+        client socket will also be closed.
         """
         try:
-            # TODO: Modify the receive to avoid short-reads
-            msg = client_sock.recv(1024).rstrip().decode('utf-8')
-            addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
-            # TODO: Modify the send to avoid short-writes
-            client_sock.send("{}\n".format(msg).encode('utf-8'))
+            # Recibo la apuesta usando el protocolo custom
+            agency, first_name, last_name, document, birthdate, number = recv_bet(client_sock)
+
+            # Creo el objeto Bet de la catedra y lo persisto
+            bet = Bet(agency, first_name, last_name, document, birthdate, number)
+            store_bets([bet])
+
+            logging.info(f'action: apuesta_almacenada | result: success | dni: {document} | numero: {number}')
+
+            # Confirmo al cliente
+            send_response(client_sock, True)
         except OSError as e:
-            logging.error("action: receive_message | result: fail | error: {e}")
+            logging.error(f"action: apuesta_almacenada | result: fail | error: {e}")
+            try:
+                send_response(client_sock, False)
+            except OSError:
+                pass
+        except Exception as e:
+            logging.error(f"action: apuesta_almacenada | result: fail | error: {e}")
+            try:
+                send_response(client_sock, False)
+            except OSError:
+                pass
         finally:
             client_sock.close()
 
