@@ -39,21 +39,29 @@ func NewClient(config ClientConfig) *Client {
 	return client
 }
 
-// createClientSocket Initializes client socket. In case of
-// failure, error is printed in stdout/stderr and exit 1
-// is returned
+// createClientSocket Initializes client socket with retries.
 func (c *Client) createClientSocket() error {
-	conn, err := net.Dial("tcp", c.config.ServerAddress)
-	if err != nil {
-		log.Criticalf(
-			"action: connect | result: fail | client_id: %v | error: %v",
-			c.config.ID,
-			err,
+	var conn net.Conn
+	var err error
+
+	for retries := 0; retries < 10; retries++ {
+		conn, err = net.Dial("tcp", c.config.ServerAddress)
+		if err == nil {
+			c.conn = conn
+			return nil
+		}
+		log.Debugf("action: connect | result: fail | client_id: %v | retry: %v | error: %v",
+			c.config.ID, retries+1, err,
 		)
-		return err
+		time.Sleep(500 * time.Millisecond)
 	}
-	c.conn = conn
-	return nil
+
+	log.Criticalf(
+		"action: connect | result: fail | client_id: %v | error: %v",
+		c.config.ID,
+		err,
+	)
+	return err
 }
 
 func (c *Client) finalize() {
