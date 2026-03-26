@@ -3,12 +3,11 @@ import logging
 import signal
 
 from common.utils import Bet, store_bets
-from common.protocol import recv_bet, send_response
+from common.protocol import recv_bet_batch, send_response
 
 
 class Server:
     def __init__(self, port, listen_backlog):
-        # Initialize server socket
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
@@ -47,31 +46,30 @@ class Server:
 
     def __handle_client_connection(self, client_sock):
         """
-        Read bet from a specific client socket, store it, and close the socket.
-
-        If a problem arises in the communication with the client, the
-        client socket will also be closed.
+        Recibe un batch de apuestas del cliente, las almacena y responde.
         """
         try:
-            # Recibo la apuesta usando el protocolo custom
-            agency, first_name, last_name, document, birthdate, number = recv_bet(client_sock)
+            # Recibo el batch de apuestas
+            raw_bets = recv_bet_batch(client_sock)
 
-            # Creo el objeto Bet de la catedra y lo persisto
-            bet = Bet(agency, first_name, last_name, document, birthdate, number)
-            store_bets([bet])
+            # Creo los objetos Bet y los persisto
+            bets = []
+            for agency, first_name, last_name, document, birthdate, number in raw_bets:
+                bets.append(Bet(agency, first_name, last_name, document, birthdate, number))
 
-            logging.info(f'action: apuesta_almacenada | result: success | dni: {document} | numero: {number}')
+            store_bets(bets)
 
-            # Confirmo al cliente
+            logging.info(f'action: apuesta_recibida | result: success | cantidad: {len(bets)}')
+
             send_response(client_sock, True)
         except OSError as e:
-            logging.error(f"action: apuesta_almacenada | result: fail | error: {e}")
+            logging.error(f"action: apuesta_recibida | result: fail | error: {e}")
             try:
                 send_response(client_sock, False)
             except OSError:
                 pass
         except Exception as e:
-            logging.error(f"action: apuesta_almacenada | result: fail | error: {e}")
+            logging.error(f"action: apuesta_recibida | result: fail | error: {e}")
             try:
                 send_response(client_sock, False)
             except OSError:
@@ -86,8 +84,6 @@ class Server:
         Function blocks until a connection to a client is made.
         Then connection created is printed and returned
         """
-
-        # Connection arrived
         logging.info('action: accept_connections | result: in_progress')
         c, addr = self._server_socket.accept()
         logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
