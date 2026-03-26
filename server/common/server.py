@@ -1,7 +1,7 @@
 import socket
 import logging
 import signal
-import os
+import threading
 
 from common.utils import Bet, store_bets, load_bets, has_won
 from common.protocol import (
@@ -21,6 +21,12 @@ class Server:
         self._notified_agencies = set()
         self._sorteo_done = False
         self._winners_by_agency = {}
+
+        # Lock para sincronizar acceso a store_bets y estado compartido
+        self._lock = threading.Lock()
+        # Evento para señalizar que el sorteo terminó
+        self._sorteo_event = threading.Event()
+
         signal.signal(signal.SIGTERM, self.handle_signal)
         signal.signal(signal.SIGINT, self.handle_signal)
 
@@ -37,7 +43,10 @@ class Server:
         while self._running:
             try:
                 client_sock = self.__accept_new_connection()
-                self.__handle_client_connection(client_sock)
+                # Lanzo un thread para manejar cada conexion en paralelo
+                t = threading.Thread(target=self.__handle_client_connection, args=(client_sock,))
+                t.daemon = True
+                t.start()
             except OSError:
                 if not self._running:
                     logging.info('action: server_shutdown | result: success')
@@ -66,41 +75,50 @@ class Server:
             client_sock.close()
 
     def __handle_bet_batch(self, client_sock):
-        """Recibe y almacena un batch de apuestas."""
+        """Recibe y almacena un batch de apuestas con lock."""
         raw_bets = recv_bet_batch(client_sock)
         bets = []
         for agency, first_name, last_name, document, birthdate, number in raw_bets:
             bets.append(Bet(agency, first_name, last_name, document, birthdate, number))
-        store_bets(bets)
+
+        with self._lock:
+            store_bets(bets)
+
         logging.info(f'action: apuesta_recibida | result: success | cantidad: {len(bets)}')
         send_response(client_sock, True)
 
     def __handle_notify(self, client_sock):
         """Registra que una agencia terminó de enviar apuestas."""
         agency = recv_field(client_sock)
-        self._notified_agencies.add(agency)
-        logging.info(f'action: notify | result: success | agency: {agency} | notified: {len(self._notified_agencies)}/{self._agency_count}')
+
+        with self._lock:
+            self._notified_agencies.add(agency)
+            notified = len(self._notified_agencies)
+
+        logging.info(f'action: notify | result: success | agency: {agency} | notified: {notified}/{self._agency_count}')
         send_response(client_sock, True)
 
-        # Si todas las agencias notificaron, realizamos el sorteo
-        if len(self._notified_agencies) == self._agency_count:
+        if notified == self._agency_count:
             self.__do_sorteo()
 
     def __do_sorteo(self):
-        """Realiza el sorteo: carga todas las apuestas y determina ganadores por agencia."""
-        self._winners_by_agency = {}
-        for bet in load_bets():
-            agency_key = str(bet.agency)
-            if agency_key not in self._winners_by_agency:
-                self._winners_by_agency[agency_key] = []
-            if has_won(bet):
-                self._winners_by_agency[agency_key].append(bet.document)
+        """Realiza el sorteo con lock para acceso seguro al archivo."""
+        with self._lock:
+            self._winners_by_agency = {}
+            for bet in load_bets():
+                agency_key = str(bet.agency)
+                if agency_key not in self._winners_by_agency:
+                    self._winners_by_agency[agency_key] = []
+                if has_won(bet):
+                    self._winners_by_agency[agency_key].append(bet.document)
+            self._sorteo_done = True
 
-        self._sorteo_done = True
+        # Señalizo a los threads que esperan la consulta de ganadores
+        self._sorteo_event.set()
         logging.info(f'action: sorteo | result: success')
 
     def __handle_query_winners(self, client_sock):
-        """Responde con los ganadores de la agencia consultada."""
+        """Responde con los ganadores de la agencia consultada. Espera al sorteo si no esta listo."""
         agency = recv_field(client_sock)
 
         if not self._sorteo_done:
