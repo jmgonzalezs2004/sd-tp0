@@ -1,9 +1,13 @@
 package common
 
 import (
+	"bufio"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,9 +20,8 @@ var log = logging.MustGetLogger("log")
 type ClientConfig struct {
 	ID            string
 	ServerAddress string
-	LoopAmount    int
 	LoopPeriod    time.Duration
-	Bet           Bet
+	BatchMaxAmount int
 }
 
 // Client Entity that encapsulates how
@@ -60,7 +63,40 @@ func (c *Client) finalize() {
 	log.Infof("action: finalize | result: success | client_id: %v", c.config.ID)
 }
 
-// StartClientLoop Envia la apuesta al servidor y espera confirmacion
+// readBetsFromFile lee las apuestas del archivo CSV de la agencia.
+// Formato esperado: Nombre,Apellido,Documento,Nacimiento,Numero
+func readBetsFromFile(filepath string) ([]Bet, error) {
+	file, err := os.Open(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("no se pudo abrir el archivo de apuestas: %v", err)
+	}
+	defer file.Close()
+
+	var bets []Bet
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		fields := strings.Split(line, ",")
+		if len(fields) < 5 {
+			continue
+		}
+		number, _ := strconv.Atoi(fields[4])
+		bet := Bet{
+			FirstName: fields[0],
+			LastName:  fields[1],
+			Document:  fields[2],
+			Birthdate: fields[3],
+			Number:    number,
+		}
+		bets = append(bets, bet)
+	}
+	return bets, scanner.Err()
+}
+
+// StartClientLoop Lee las apuestas del archivo CSV y las envia al servidor en batches
 func (c *Client) StartClientLoop() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
@@ -72,13 +108,28 @@ func (c *Client) StartClientLoop() {
 		os.Exit(0)
 	}()
 
-	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
+	// Leo las apuestas del archivo de la agencia
+	filename := fmt.Sprintf("agency-%s.csv", c.config.ID)
+	bets, err := readBetsFromFile(filename)
+	if err != nil {
+		log.Errorf("action: read_file | result: fail | client_id: %v | error: %v", c.config.ID, err)
+		return
+	}
+
+	// Envio las apuestas en batches
+	batchSize := c.config.BatchMaxAmount
+	for i := 0; i < len(bets); i += batchSize {
+		end := i + batchSize
+		if end > len(bets) {
+			end = len(bets)
+		}
+		batch := bets[i:end]
+
 		if err := c.createClientSocket(); err != nil {
 			return
 		}
 
-		// Envio la apuesta al servidor usando el protocolo custom
-		err := SendBet(c.conn, c.config.ID, c.config.Bet)
+		err := SendBetBatch(c.conn, c.config.ID, batch)
 		if err != nil {
 			log.Errorf("action: apuesta_enviada | result: fail | client_id: %v | error: %v",
 				c.config.ID, err,
@@ -87,7 +138,6 @@ func (c *Client) StartClientLoop() {
 			return
 		}
 
-		// Espero confirmacion del servidor
 		ok, err := RecvResponse(c.conn)
 		c.conn.Close()
 
@@ -98,15 +148,13 @@ func (c *Client) StartClientLoop() {
 			return
 		}
 
-		if ok {
-			log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
-				c.config.Bet.Document, c.config.Bet.Number,
-			)
-		} else {
+		if !ok {
 			log.Errorf("action: apuesta_enviada | result: fail | client_id: %v", c.config.ID)
+			return
 		}
 
 		time.Sleep(c.config.LoopPeriod)
 	}
+
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }
