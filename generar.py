@@ -13,7 +13,7 @@ def main():
         print("La cantidad de clientes debe ser un número entero.")
         sys.exit(1)
 
-    yaml = """name: tp0
+    yaml = f"""name: tp0
 services:
   server:
     container_name: server
@@ -21,6 +21,7 @@ services:
     entrypoint: python3 /main.py
     environment:
       - PYTHONUNBUFFERED=1
+      - CANT_AGENCIAS={clients}
     networks:
       - testing_net
     volumes:
