@@ -30,6 +30,18 @@ Se ha realizado una implementación mínima de manejo de señales (`SIGTERM` y `
 3. Servidor recibe y deserializa la apuesta, la almacena y envía confirmación.
 4. Cliente recibe la confirmación y loguea `apuesta_enviada`.
 5. Servidor loguea `apuesta_almacenada`.
+---
+
+## Ejercicio 6
+
+**Objetivo:** Envío de apuestas por lotes (batches) desde archivos CSV.
+
+**Cambios realizados:**
+- El cliente ahora lee las apuestas de un archivo `.data/agency-{ID}.csv` montado por volumen, en lugar de recibirlas por variables de entorno.
+- Las apuestas se agrupan en batches de tamaño configurable (`batch.maxAmount` en `config.yaml`) y se envían en una sola conexión por batch.
+- El protocolo incorpora un header de 2 bytes indicando la cantidad de apuestas en el batch, seguido de cada apuesta serializada.
+- El servidor recibe el batch completo, persiste todas las apuestas y loguea `apuesta_recibida` con la cantidad procesada.
+- Se agregaron reintentos de conexión en el cliente para manejar la race condition de arranque.
 
 ---
 
