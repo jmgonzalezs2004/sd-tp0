@@ -55,6 +55,18 @@ Se ha realizado una implementación mínima de manejo de señales (`SIGTERM` y `
 - La respuesta de ganadores solo se envía después del sorteo. Antes de eso, el servidor responde con error y el cliente reintenta.
 
 ---
+## Ejercicio 8
+
+**Objetivo:** Procesamiento concurrente de conexiones en el servidor.
+
+**Cambios realizados:**
+- El servidor ahora lanza un `threading.Thread` por cada conexión entrante, permitiendo atender múltiples clientes en paralelo.
+- Se utiliza `threading.Lock` para sincronizar el acceso a `store_bets()` y al estado compartido (set de agencias notificadas, resultados del sorteo), dado que `store_bets` no es thread-safe.
+- Se utiliza `threading.Event` para señalizar la finalización del sorteo a los threads que consultan ganadores.
+
+*Nota:* Se eligió multithreading sobre multiprocessing porque el GIL de Python no afecta significativamente a este caso de uso donde el cuello de botella es I/O (red y disco), no CPU.
+
+---
 
 ## Explicación del sistema
 
