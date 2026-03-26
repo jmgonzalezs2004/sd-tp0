@@ -44,6 +44,17 @@ Se ha realizado una implementación mínima de manejo de señales (`SIGTERM` y `
 - Se agregaron reintentos de conexión en el cliente para manejar la race condition de arranque.
 
 ---
+## Ejercicio 7
+
+**Objetivo:** Notificación de fin de envío, sorteo y consulta de ganadores.
+
+**Cambios realizados:**
+- El protocolo ahora usa un byte de tipo de mensaje (`0x01` = batch, `0x02` = notificación, `0x03` = consulta de ganadores) para distinguir las distintas operaciones.
+- El cliente ejecuta un flujo de 3 fases: (1) envío de batches, (2) notificación de que terminó, (3) consulta de ganadores con reintentos hasta que el sorteo esté listo.
+- El servidor lleva un contador de agencias notificadas. Cuando todas las agencias (N configurable via `CANT_AGENCIAS`) notifican, realiza el sorteo usando `load_bets()` y `has_won()`, y agrupa los ganadores por agencia.
+- La respuesta de ganadores solo se envía después del sorteo. Antes de eso, el servidor responde con error y el cliente reintenta.
+
+---
 
 ## Explicación del sistema
 
