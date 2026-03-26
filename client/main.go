@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -103,11 +104,25 @@ func main() {
 	// Print program config with debugging purposes
 	PrintConfig(v)
 
+	// Leo los datos de la apuesta desde variables de entorno
+	nombre := os.Getenv("NOMBRE")
+	apellido := os.Getenv("APELLIDO")
+	documento := os.Getenv("DOCUMENTO")
+	nacimiento := os.Getenv("NACIMIENTO")
+	numero, _ := strconv.Atoi(os.Getenv("NUMERO"))
+
 	clientConfig := common.ClientConfig{
 		ServerAddress: v.GetString("server.address"),
 		ID:            v.GetString("id"),
 		LoopAmount:    v.GetInt("loop.amount"),
 		LoopPeriod:    v.GetDuration("loop.period"),
+		Bet: common.Bet{
+			FirstName: nombre,
+			LastName:  apellido,
+			Document:  documento,
+			Birthdate: nacimiento,
+			Number:    numero,
+		},
 	}
 
 	client := common.NewClient(clientConfig)
