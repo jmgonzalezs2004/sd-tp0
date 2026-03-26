@@ -16,6 +16,11 @@ import (
 
 var log = logging.MustGetLogger("log")
 
+const (
+	maxConnectRetries = 10
+	connectRetryDelay = 500 * time.Millisecond
+)
+
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
 	ID             string
@@ -44,7 +49,7 @@ func (c *Client) createClientSocket() error {
 	var conn net.Conn
 	var err error
 
-	for retries := 0; retries < 10; retries++ {
+	for retries := 0; retries < maxConnectRetries; retries++ {
 		conn, err = net.Dial("tcp", c.config.ServerAddress)
 		if err == nil {
 			c.conn = conn
@@ -53,7 +58,7 @@ func (c *Client) createClientSocket() error {
 		log.Debugf("action: connect | result: fail | client_id: %v | retry: %v | error: %v",
 			c.config.ID, retries+1, err,
 		)
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(connectRetryDelay)
 	}
 
 	log.Criticalf("action: connect | result: fail | client_id: %v | error: %v", c.config.ID, err)
