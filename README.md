@@ -4,15 +4,13 @@ Juan Manuel Gonzalez Segura
 110582  
 
 ---
+## Ejercicio 4
 
+**Objetivo:** Implementación de un manejo de señales básico en el servidor para permitir un apagado controlado (Graceful Shutdown).
 
-## Ejercicio 3
+Se ha realizado una implementación mínima de manejo de señales (`SIGTERM` y `SIGINT`) en el servidor. Esta funcionalidad permite capturar la señal de terminación, cerrar el socket de escucha y finalizar la ejecución de manera limpia.
 
-**Objetivo:** Validar el funcionamiento del servidor de manera independiente interactuando directamente a través de la red de contenedores.
-
-1. Creación de un script `validar-echo-server.sh` que levanta un contenedor temporal de la imagen `busybox`, enrutándolo a la red interna compartida (`testing_net`). 
-2. Utilización de la herramienta `nc` (netcat) dentro de este contenedor para enviar un mensaje directo al contenedor `server` por el puerto `12345`.
-3. El script verifica que la respuesta recibida sea idéntica al payload enviado ("el mensaje del papu :v") para corroborar la correctitud del "Echo server", imprimiendo el resultado (`success` o `fail`) por salida estándar.
+*Nota:* Esta es una implementación inicial que será expandida a medida que se incorpore la lógica de negocio en los siguientes ejercicios.
 
 ---
 
