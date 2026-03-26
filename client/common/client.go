@@ -18,9 +18,9 @@ var log = logging.MustGetLogger("log")
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
-	ID            string
-	ServerAddress string
-	LoopPeriod    time.Duration
+	ID             string
+	ServerAddress  string
+	LoopPeriod     time.Duration
 	BatchMaxAmount int
 }
 
@@ -56,11 +56,7 @@ func (c *Client) createClientSocket() error {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	log.Criticalf(
-		"action: connect | result: fail | client_id: %v | error: %v",
-		c.config.ID,
-		err,
-	)
+	log.Criticalf("action: connect | result: fail | client_id: %v | error: %v", c.config.ID, err)
 	return err
 }
 
@@ -72,7 +68,6 @@ func (c *Client) finalize() {
 }
 
 // readBetsFromFile lee las apuestas del archivo CSV de la agencia.
-// Formato esperado: Nombre,Apellido,Documento,Nacimiento,Numero
 func readBetsFromFile(filepath string) ([]Bet, error) {
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -104,7 +99,7 @@ func readBetsFromFile(filepath string) ([]Bet, error) {
 	return bets, scanner.Err()
 }
 
-// StartClientLoop Lee las apuestas del archivo CSV y las envia al servidor en batches
+// StartClientLoop Ejecuta el flujo completo: enviar apuestas, notificar, consultar ganadores
 func (c *Client) StartClientLoop() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
@@ -116,7 +111,7 @@ func (c *Client) StartClientLoop() {
 		os.Exit(0)
 	}()
 
-	// Leo las apuestas del archivo de la agencia
+	// Fase 1: Enviar todas las apuestas en batches
 	filename := fmt.Sprintf("agency-%s.csv", c.config.ID)
 	bets, err := readBetsFromFile(filename)
 	if err != nil {
@@ -124,7 +119,6 @@ func (c *Client) StartClientLoop() {
 		return
 	}
 
-	// Envio las apuestas en batches
 	batchSize := c.config.BatchMaxAmount
 	for i := 0; i < len(bets); i += batchSize {
 		end := i + batchSize
@@ -139,9 +133,7 @@ func (c *Client) StartClientLoop() {
 
 		err := SendBetBatch(c.conn, c.config.ID, batch)
 		if err != nil {
-			log.Errorf("action: apuesta_enviada | result: fail | client_id: %v | error: %v",
-				c.config.ID, err,
-			)
+			log.Errorf("action: apuesta_enviada | result: fail | client_id: %v | error: %v", c.config.ID, err)
 			c.conn.Close()
 			return
 		}
@@ -149,14 +141,7 @@ func (c *Client) StartClientLoop() {
 		ok, err := RecvResponse(c.conn)
 		c.conn.Close()
 
-		if err != nil {
-			log.Errorf("action: apuesta_enviada | result: fail | client_id: %v | error: %v",
-				c.config.ID, err,
-			)
-			return
-		}
-
-		if !ok {
+		if err != nil || !ok {
 			log.Errorf("action: apuesta_enviada | result: fail | client_id: %v", c.config.ID)
 			return
 		}
@@ -164,5 +149,44 @@ func (c *Client) StartClientLoop() {
 		time.Sleep(c.config.LoopPeriod)
 	}
 
-	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
+	// Fase 2: Notificar al servidor que terminamos de enviar
+	if err := c.createClientSocket(); err != nil {
+		return
+	}
+	err = SendNotify(c.conn, c.config.ID)
+	if err != nil {
+		log.Errorf("action: notify | result: fail | client_id: %v | error: %v", c.config.ID, err)
+		c.conn.Close()
+		return
+	}
+	ok, err := RecvResponse(c.conn)
+	c.conn.Close()
+	if err != nil || !ok {
+		log.Errorf("action: notify | result: fail | client_id: %v", c.config.ID)
+		return
+	}
+
+	// Fase 3: Consultar ganadores (con reintentos, el sorteo puede no estar listo)
+	for {
+		if err := c.createClientSocket(); err != nil {
+			return
+		}
+		err = SendQueryWinners(c.conn, c.config.ID)
+		if err != nil {
+			log.Errorf("action: consulta_ganadores | result: fail | client_id: %v | error: %v", c.config.ID, err)
+			c.conn.Close()
+			return
+		}
+		winners, err := RecvWinners(c.conn)
+		c.conn.Close()
+
+		if err != nil {
+			// El sorteo todavía no se realizó, reintento
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %v", len(winners))
+		break
+	}
 }
